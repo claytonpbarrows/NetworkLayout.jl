@@ -32,11 +32,12 @@ the nodes.
     iterations::Int
     initialpos::Vector{Point{Dim,Ptype}}
     seed::UInt
+    fixed::Set{Int64}
 end
 
 # TODO: check SFDP default parameters
 function SFDP(; dim=2, Ptype=Float64, tol=1.0, C=0.2, K=1.0, iterations=100, initialpos=Point{dim,Ptype}[],
-              seed=1)
+              seed=1, fixed=Set{Int64}())
     if !isempty(initialpos)
         initialpos = Point.(initialpos)
         Ptype = eltype(eltype(initialpos))
@@ -44,7 +45,7 @@ function SFDP(; dim=2, Ptype=Float64, tol=1.0, C=0.2, K=1.0, iterations=100, ini
         Ptype == Any && error("Please provide list of Point{N,T} with same T")
         dim = length(eltype(initialpos))
     end
-    return SFDP{dim,Ptype,typeof(tol)}(tol, C, K, iterations, initialpos, seed)
+    return SFDP{dim,Ptype,typeof(tol)}(tol, C, K, iterations, initialpos, seed, fixed)
 end
 
 function Base.iterate(iter::LayoutIterator{SFDP{Dim,Ptype,T}}) where {Dim,Ptype,T}
@@ -69,6 +70,7 @@ function Base.iterate(iter::LayoutIterator{<:SFDP}, state)
     algo, adj_matrix = iter.algorithm, iter.adj_matrix
     iter, energy0, step, progress, locs0, stopflag = state
     K, C, tol = algo.K, algo.C, algo.tol
+    fixed = algo.fixed
 
     # stop if stopflag (tol reached) or nr of iterations reached
     if iter >= algo.iterations || stopflag
@@ -93,7 +95,9 @@ function Base.iterate(iter::LayoutIterator{<:SFDP}, state)
                                ((locs[j] .- locs[i]) / norm(locs[j] .- locs[i])))
             end
         end
-        locs[i] = locs[i] .+ step .* (force ./ norm(force))
+        if !in(i, fixed)
+            locs[i] = locs[i] .+ step .* (force ./ norm(force))
+        end
         energy = energy + norm(force)^2
     end
     step, progress = update_step(step, energy, energy0, progress)
